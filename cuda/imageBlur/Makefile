@@ -34,18 +34,18 @@ TARGET = image_blur
 
 build: $(TARGET)
 
-$(TARGET): src/dlink.o src/main.o src/$(TARGET).o
+$(TARGET): dlink.o main.o $(TARGET).o
 	$(NVCC) $(NVCCFLAGS) $(opencvLIB) $(opencvINC) $^ -o $@ $(GENCODE_FLAGS) $(OPENCV_LINK) -link 
 
-src/dlink.o: src/$(TARGET).o 
+dlink.o: $(TARGET).o 
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(GENCODE_FLAGS) -dlink
 
-src/main.o: src/main.cpp
+main.o: main.cpp
 	$(GCC) $(GccFLAGS) $(opencvLIB) $(opencvINC) -c $< -o $@
 	
-src/$(TARGET).o: src/$(TARGET).cu
+$(TARGET).o: $(TARGET).cu
 	$(NVCC) $(NVCCFLAGS) -dc $< -o $@ $(GENCODE_FLAGS) 
 	
 clean:
-	$(RM) $(TARGET) src/*.o *.o *.tar* *.core* *out*.jpg *input*.jpg
+	$(RM) $(TARGET) *.o *.o *.tar* *.core* *out*.jpg 
 
