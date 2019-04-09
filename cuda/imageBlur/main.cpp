@@ -21,6 +21,7 @@ double CLOCK() {
 	return (t.tv_sec * 1000)+(t.tv_nsec*1e-6);
 }
 
+// gpu function
 extern void imageBlur(unsigned char *input,
 	                  unsigned char *output,
        			      unsigned int rows,
@@ -28,15 +29,8 @@ extern void imageBlur(unsigned char *input,
 
 int main( int argc, const char** argv ) {
         
-    // Check inputs
-    /*if (argc != 3){
-        cout << "Incorrect number of inputs" << endl;
-        cout << argv[0] << " <input file> <output file name>" << endl;
-        return -1;
-    } */       
-        
-    // Read input image from argument
-    Mat input_image = imread("input.jpg", IMREAD_COLOR); //argv[1]
+    // Read input image 
+    Mat input_image = imread("input.jpg", IMREAD_COLOR);
     if (input_image.empty()){
         cout << "Image cannot be loaded..!!" << endl;
         return -1;
@@ -44,21 +38,41 @@ int main( int argc, const char** argv ) {
     unsigned int rows = input_image.rows;
     unsigned int cols = input_image.cols;
 
-    // output image
-    Mat output_image = Mat::zeros(rows, cols, CV_8U);
+	// separate image to three channels
+	vector<Mat> rgb_channels(3);
+	split(input_image, rgb_channels);
+	Mat input_red, input_blue, input_green;
+	input_red = rgb_channels[2];
+	input_green = rgb_channels[1];
+	input_blue = rgb_channels[0];
+	
+    // output image channels
+    Mat output_red = Mat::zeros(rows, cols, CV_8U);
+	Mat output_green = Mat::zeros(rows, cols, CV_8U);
+	Mat output_blue = Mat::zeros(rows, cols, CV_8U);
+	Mat output_image = Mat::zeros(rows, cols, CV_8U);
 
+	// call and time gpu function
 	double start = CLOCK();
-
-	// call external function
-	imageBlur((unsigned char *)input_image.data,
-			  (unsigned char *)output_image.data,
+	imageBlur((unsigned char *)input_red.data,
+			  (unsigned char *)output_red.data,
 			   rows, cols);
-
+	imageBlur((unsigned char *)input_green.data,
+			  (unsigned char *)output_green.data,
+			   rows, cols);
+	imageBlur((unsigned char *)input_blue.data,
+			  (unsigned char *)output_blue.data,
+			   rows, cols);
 	double end = CLOCK();
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
-	// Write to image
-    imwrite ("output.jpg", output_image);
+	// Merge and write image
+   	vector<Mat> out_channels;
+	out_channels.push_back(output_blue);
+	out_channels.push_back(output_green);
+	out_channels.push_back(output_red);
+	merge(out_channels, output_image);
+	imwrite ("output.jpg", output_image);
 
     return 0;
 }
