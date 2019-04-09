@@ -14,6 +14,8 @@
 using namespace cv;
 using namespace std;
 
+float *h_filter;
+
 // Timer function
 double CLOCK() {
 	struct timespec t;
@@ -22,10 +24,12 @@ double CLOCK() {
 }
 
 // gpu function
-extern void imageBlur(unsigned char *input,
-	                  unsigned char *output,
+extern void imageBlur(unsigned char *h_input,
+	                  unsigned char *h_output,
        			      unsigned int rows,
-       			      unsigned int cols);
+       			      unsigned int cols,
+					  float *h_filter,
+					  int filter_width);
 
 int main( int argc, const char** argv ) {
         
@@ -52,17 +56,40 @@ int main( int argc, const char** argv ) {
 	Mat output_blue = Mat::zeros(rows, cols, CV_8U);
 	Mat output_image = Mat::zeros(rows, cols, CV_8U);
 
+	// create filter for gaussian blur
+	const int blurKernelWidth = 9;
+  	const float blurKernelSigma = 2.;
+
+  	int filter_width = blurKernelWidth;
+
+  	//create and fill the filter we will convolve with
+  	h_filter = (float*) malloc(filter_width * filter_width * sizeof(float));
+  	float filterSum = 0.f; //for normalization
+  	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
+    	for (int c = -blurKernelWidth/2; c <= blurKernelWidth/2; ++c) {
+      		float filterValue = expf( -(float)(c * c + r * r) / (2.f * blurKernelSigma * blurKernelSigma));
+      		h_filter[(r + blurKernelWidth/2) * blurKernelWidth + c + blurKernelWidth/2] = filterValue;
+     	filterSum += filterValue;
+    	}
+  	}
+  	float normalizationFactor = 1.f / filterSum;
+  	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
+    	for (int c = -blurKernelWidth/2; c <= blurKernelWidth/2; ++c) {
+      	h_filter[(r + blurKernelWidth/2) * blurKernelWidth + c + blurKernelWidth/2] *= normalizationFactor;
+    	}
+  	}
+
 	// call and time gpu function
 	double start = CLOCK();
 	imageBlur((unsigned char *)input_red.data,
 			  (unsigned char *)output_red.data,
-			   rows, cols);
+			   rows, cols, h_filter, filter_width);
 	imageBlur((unsigned char *)input_green.data,
 			  (unsigned char *)output_green.data,
-			   rows, cols);
+			   rows, cols, h_filter, filter_width);
 	imageBlur((unsigned char *)input_blue.data,
 			  (unsigned char *)output_blue.data,
-			   rows, cols);
+			   rows, cols, h_filter, filter_width);
 	double end = CLOCK();
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
