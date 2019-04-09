@@ -3,10 +3,10 @@
 #include <cuda.h>
 #include <time.h>
 
-unsigned char *red;
-unsigned char *green;
-unsigned char *blue;
-float *d_filter;
+#define TILE_SIZE 16
+
+unsigned char *d_input;
+unsigned char *d_output;
 
 inline cudaError_t checkCuda(cudaError_t result) {
 	#if defined(DEBUG) || defined(_DEBUG)
@@ -18,7 +18,7 @@ inline cudaError_t checkCuda(cudaError_t result) {
 		return result;
 }
 
-__global__ void separateChannels(const uchar4* const inputImageRGBA,
+/*__global__ void separateChannels(const uchar4* const inputImageRGBA,
                       int numRows,
                       int numCols,
                       unsigned char* const redChannel,
@@ -85,52 +85,48 @@ __global__ void gaussianBlur(const unsigned char* const input,
 	}	
 	output[y * cols + x] = c;
 }
+*/
 
-void imageBlur (const uchar4* const input,
-			    uchar4* output,
-				unsigned char* red_blurred,
-                unsigned char* green_blurred,
-                unsigned char* blue_blurred,
-			    unsigned int rows,
-			    unsigned int cols,
-				const float* const h_filter,
-				int filter_width) {
+__global__ void gaussianBlur(unsigned char *input,
+							 unsigned char *output,
+							 unsigned int rows,
+							 unsigned int cols) {
+	
+	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
+	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
+	if (x > cols || y > rows)
+		return;
+	int index = x * rows + y;
+	
+	// test, copy input to ouput
+	output[index] = input[index];
+}
+
+void imageBlur (unsigned char* h_input,
+			    unsigned char* h_output,
+				unsigned int rows,
+			    unsigned int cols) {
 
 	// block and grid size
-	int block_width = 16; // tile
-	const dim3 block_size(block_width, block_width);	
-	int blocks_x = (cols + block_width - 1) / block_width;
-	int blocks_y = (rows + block_width - 1) / block_width;
-	const dim3 grid_size(blocks_x, blocks_y);	
+	int gridX = 1 + ((cols - 1) / TILE_SIZE);
+	int gridY = 1 + ((rows - 1) / TILE_SIZE);
+	dim3 dimGrid(gridX, gridY);
+	dim3 dimBlock(TILE_SIZE, TILE_SIZE);
 
 	// allocate memory and copy to GPU
-	checkCuda(cudaMalloc(&red, sizeof(unsigned char) * rows * cols));
-	checkCuda(cudaMalloc(&green, sizeof(unsigned char) * rows * cols));
-	checkCuda(cudaMalloc(&blue, sizeof(unsigned char) * rows * cols));
-	checkCuda(cudaMalloc(&d_filter, sizeof(float) * filter_width * filter_width));
-	checkCuda(cudaMemcpy(d_filter, h_filter, sizeof(float) * filter_width * filter_width, cudaMemcpyHostToDevice));
+	int size = rows * cols;
+	checkCuda(cudaMalloc((void**)&d_input, size * sizeof(unsigned char)));
+	checkCuda(cudaMalloc((void**)&d_output, size * sizeof(unsigned char)));
+	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
+	checkCuda(cudaMemcpy(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice));
 
-	// separate channels
-	separateChannels<<<grid_size, block_size>>>(input, rows, cols, red, green, blue);
+	//kernel call
+	gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output, rows, cols);
 
-	//call gaussian blur kernel on each channel
-	gaussianBlur <<<grid_size, block_size>>>(red, red_blurred, rows, cols, d_filter, filter_width);
-	gaussianBlur <<<grid_size, block_size>>>(green, green_blurred, rows, cols, d_filter, filter_width);
-	gaussianBlur <<<grid_size, block_size>>>(blue, blue_blurred, rows, cols, d_filter, filter_width);
-	cudaDeviceSynchronize();
-
-	//combine channels
-	combineChannels<<<grid_size, block_size>>>(red_blurred, 
-											   green_blurred,
-											   blue_blurred,
-											   output,
-											   rows,
-											   cols);
-	cudaDeviceSynchronize();
+	//copy output to host
+	checkCuda(cudaMemcpy(h_output, d_output, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
-	cudaFree(red);
-	cudaFree(green);	
-	cudaFree(blue);
-	cudaFree(d_filter);
+	checkCuda(cudaFree(d_input));
+	checkCuda(cudaFree(d_output));
 }
