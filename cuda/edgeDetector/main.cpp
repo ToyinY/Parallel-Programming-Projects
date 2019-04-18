@@ -14,8 +14,6 @@
 using namespace cv;
 using namespace std;
 
-float *h_filter;
-
 // Timer function
 double CLOCK() {
 	struct timespec t;
@@ -25,11 +23,13 @@ double CLOCK() {
 
 // gpu function
 extern void edgeDetector (unsigned char *h_input,
-	                  unsigned char *h_output,
-       			      unsigned int rows,
-       			      unsigned int cols,
-					  float *h_filter,
-					  int filter_width);
+	                  	  unsigned char *h_output,
+       			      	  unsigned int rows,
+       			      	  unsigned int cols,
+					  	  float *h_filter,
+					  	  int filter_width,
+            			  float *h_sobel_mask_x,
+                    float *h_sobel_mask_y);
 
 int main( int argc, const char** argv ) {
         
@@ -41,6 +41,7 @@ int main( int argc, const char** argv ) {
     } 
     unsigned int rows = input_image.rows;
     unsigned int cols = input_image.cols;
+    int size = rows * cols;
 
 	Mat output_image = Mat::zeros(rows, cols, CV_8U);
 
@@ -50,6 +51,7 @@ int main( int argc, const char** argv ) {
   	int filter_width = blurKernelWidth;
 
   	//create and fill the filter to convolve with
+    float *h_filter;
   	h_filter = (float*) malloc(filter_width * filter_width * sizeof(float));
   	float filterSum = 0.f; 
   	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
@@ -66,15 +68,27 @@ int main( int argc, const char** argv ) {
     	}
   	}
 
+  	// init and create sobel masks
+  	float *h_sobel_mask_x, *h_sobel_mask_y;
+  	h_sobel_mask_x = (float*)malloc(filter_width * sizeof(float));
+  	h_sobel_mask_y = (float*)malloc(filter_width * sizeof(float));
+  	h_sobel_mask_x[0] = 1.0; h_sobel_mask_x[1] = 0.0; h_sobel_mask_x[2] = -1.0;
+  	h_sobel_mask_x[3] = 2.0; h_sobel_mask_x[4] = 0.0; h_sobel_mask_x[5] = -2.0;
+  	h_sobel_mask_x[6] = 1.0; h_sobel_mask_x[7] = 0.0; h_sobel_mask_x[8] = -1.0;
+  	h_sobel_mask_y[0] = -1.0; h_sobel_mask_y[1] = -2.0; h_sobel_mask_y[2] = -1.0;
+  	h_sobel_mask_y[3] =  0.0; h_sobel_mask_y[4] =  0.0; h_sobel_mask_y[5] =  0.0;
+  	h_sobel_mask_y[6] =  1.0; h_sobel_mask_y[7] =  2.0; h_sobel_mask_y[8] =  1.0;
+
 	// call and time gpu function
 	double start = CLOCK();
 	edgeDetector((unsigned char *)input_image.data,
-			  (unsigned char *)output_image.data,
-			   rows, cols, h_filter, filter_width);
+			     (unsigned char *)output_image.data,
+			     rows, cols, h_filter, filter_width,
+               	 h_sobel_mask_x, h_sobel_mask_y);
 	double end = CLOCK();
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
-	// Merge and write image
+	// write final image
 	imwrite ("output.jpg", output_image);
 
     return 0;
