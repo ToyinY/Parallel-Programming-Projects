@@ -10,6 +10,7 @@ unsigned char *d_input;
 unsigned char *d_output_blur;
 unsigned char *d_output_sobel;
 unsigned char *d_output_nms;
+unsigned char *d_output_thresh;
 unsigned char *d_output;
 double *d_edge_direction;
 float *d_edge_magnitude;
@@ -111,7 +112,7 @@ __global__ void sobelFilter(unsigned char *input,
 __global__ void nonMaxSuppression(unsigned char *output,
 								  unsigned char *input,
 								  double *edge_direction,
-						   		  unsigned int rows,
+								  unsigned int rows,
 						   		  unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
@@ -140,16 +141,43 @@ __global__ void nonMaxSuppression(unsigned char *output,
 	} else {
 		output[index] = 0;
 	}
+
+	
 }
 
-/*__global__ void hysteresis(unsigned char *input, 
-						   		  unsigned char *output,
-								  float *edge_magnitude,
-								  double *edge_direction,
-						   		  unsigned int rows,
-						   		  unsigned int cols) {
+__global__ void doubleThreshold(unsigned char *output,
+								unsigned char *input,
+								unsigned int rows,
+								unsigned int cols) {
+	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
+	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
+	if (x >= cols || y >= rows)
+		return;
+	int index = y * cols + x;
 
-}*/
+	float high = 80, low = 30, weak = 25, strong = 255;
+	//if (x == 0) printf("input: %f\n", input[index]);
+	if (input[index] >= high) { //strong
+		output[index] = strong;
+	} else if (input[index] <= high && input[index] >= low) { //weak
+		output[index] = weak;
+	} else { //non-relevent
+		output[index] = 0;
+	}
+	//printf("output: %f\n", output[index]);
+}
+
+__global__ void histeresis(unsigned char *input, 
+						   unsigned char *output,
+						   unsigned int rows,
+						   unsigned int cols) {
+	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
+	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
+	if (x >= cols - 1 || y >= rows - 1 || x < 1 || y < 1)
+		return;
+	int index = y * cols + x;
+
+}
 
 void edgeDetector (unsigned char* h_input,
 			    unsigned char* h_output,
@@ -173,6 +201,7 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMalloc((void**)&d_output_sobel, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output_nms, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output_sobel, size * sizeof(unsigned char)));
+	checkCuda(cudaMalloc((void**)&d_output_thresh, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_edge_direction, size * sizeof(double)));
 	checkCuda(cudaMalloc((void**)&d_edge_magnitude, size * sizeof(float)));
 	checkCuda(cudaMalloc((void**)&d_sobel_mask_x, filter_width * sizeof(double)));
@@ -184,6 +213,7 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMemset(d_output_nms, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_direction, 0, size * sizeof(double)));
 	checkCuda(cudaMemset(d_output_sobel, 0, size * sizeof(unsigned char)));
+	checkCuda(cudaMemset(d_output_thresh, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_magnitude, 0, size * sizeof(float)));
 	checkCuda(cudaMemcpy(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice));	
 	checkCuda(cudaMemcpy(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice));
@@ -194,7 +224,7 @@ void edgeDetector (unsigned char* h_input,
 	
 	//*** Canney Edge Detector ***//
 
-	// 1) Noise Reduction with Gaussian Blur
+	// 1) Noise Reduction with Gaussian Blur (not working now)
 	//gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
 
 	// 2) Gradient Calulation with Sobel Filter
@@ -203,17 +233,21 @@ void edgeDetector (unsigned char* h_input,
 	// 3) Non-Maximum Suppression
 	nonMaxSuppression<<<dimGrid, dimBlock>>>(d_output_nms, d_output_sobel, d_edge_direction, rows, cols);
 
-	// 4) Hysteresis
-	//histeresis<<<dimGrid, dimBlock>>>(d_output);
+	// 4) Double threshold
+	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_thresh, d_output_nms, rows, cols);
+
+	// 5) Hysteresis
+	histeresis<<<dimGrid, dimBlock>>>(d_output, d_output_thresh, rows, cols);
 
 	//copy final output to host
-	checkCuda(cudaMemcpy(h_output, /*d_output*/d_output_nms, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
 	checkCuda(cudaFree(d_input));
 	checkCuda(cudaFree(d_output_blur));
 	checkCuda(cudaFree(d_output_nms));
 	checkCuda(cudaFree(d_output_sobel));
+	checkCuda(cudaFree(d_output_thresh));
 	checkCuda(cudaFree(d_output));
 	checkCuda(cudaFree(d_edge_magnitude));
 	checkCuda(cudaFree(d_edge_direction));
