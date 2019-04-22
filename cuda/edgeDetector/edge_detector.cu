@@ -6,6 +6,7 @@
 
 #define TILE_SIZE 16
 
+// buffers for gpu processing
 unsigned char *d_input;
 unsigned char *d_output_blur;
 unsigned char *d_output_sobel;
@@ -41,16 +42,16 @@ __global__ void gaussianBlur(unsigned char *input,
 		return;
 	int index = y * cols + x;
 	
-	float result = 0.0f;
+	float result = 0.0;
 	for (int fx = 0; fx < filter_width; fx++) {
 		for (int fy = 0; fy < filter_width; fy++) {
 			int imagex = x + fx - filter_width / 2;
 			int imagey = y + fy - filter_width / 2;
 			imagex = min(max(imagex, 0), cols - 1);
 			imagey = min(max(imagey, 0), rows - 1);
-			//printf("filter width: %d fx: %d fy %d\n", filter_width, fx, fy);
+			printf("filter width: %d fx: %d fy %d\n", filter_width, fx, fy);
 			//printf("imagex = %d imagey = %d\n", imagex, imagey);
-			printf("x = %d y = %d\n", fy * filter_width + fx, imagey * cols + imagex);
+			//printf("x = %d y = %d\n", fy * filter_width + fx, imagey * cols + imagex);
 			//float image_value = (float)input[imagey * cols + imagex];
 			//float filter_value = (float)filter[fy * filter_width + fx];
 			//printf("result: %f\n", image_value * filter_value);
@@ -58,7 +59,7 @@ __global__ void gaussianBlur(unsigned char *input,
 		}
 	}
 	printf("pixel value: %f ", result);	
-	output[index] = (unsigned char)result;
+	output[index] = result;
 }
 
 __global__ void sobelFilter(unsigned char *input, 
@@ -76,7 +77,7 @@ __global__ void sobelFilter(unsigned char *input,
 	int index = y * cols + x;
 
 	// magnitude calculation
-	float value_x = 0.0, value_y = 0.0, angle = 0.0;
+	float value_x = 0, value_y = 0, angle = 0;
 	for (int k = 0; k < 3; k++) {
 		for (int l = 0; l < 3; l++) {
 			value_x += sobel_mask_x[l * 3 + k] * input[((y + 1) + (1 - l)) * cols + ((x + 1) + (1 - k))];
@@ -88,7 +89,7 @@ __global__ void sobelFilter(unsigned char *input,
 	output[index] = edge_magnitude[index];
 	
 	// angle direction calculation
-	if ((value_x != 0.0) || (value_y != 0.0)) {
+	if ((value_x != 0) || (value_y != 0)) {
 		angle = atan2(value_y, value_x) * 180.0 / 3.14159;
 	} else {
 		angle = 0.0;
@@ -109,18 +110,18 @@ __global__ void sobelFilter(unsigned char *input,
 	}
 }
 
-__global__ void nonMaxSuppression(unsigned char *output,
-								  unsigned char *input,
+__global__ void nonMaxSuppression(unsigned char *input,
+								  unsigned char *output,
 								  double *edge_direction,
 								  unsigned int rows,
 						   		  unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
-	if (x >= cols - 1 || y >= rows - 1 || x < 1 || y < 1)
+	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
 		return;
 	int index = y * cols + x;
 	
-	float pixel_1 = 255.0f, pixel_2 = 255.0f;
+	float pixel_1 = 255, pixel_2 = 255;
 	
 	if (edge_direction[index] == 0) {
 		pixel_1 = input[y * cols + (x + 1)];
@@ -141,12 +142,10 @@ __global__ void nonMaxSuppression(unsigned char *output,
 	} else {
 		output[index] = 0;
 	}
-
-	
 }
 
-__global__ void doubleThreshold(unsigned char *output,
-								unsigned char *input,
+__global__ void doubleThreshold(unsigned char *input,
+								unsigned char *output,
 								unsigned int rows,
 								unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
@@ -155,8 +154,8 @@ __global__ void doubleThreshold(unsigned char *output,
 		return;
 	int index = y * cols + x;
 
-	float high = 80, low = 30, weak = 25, strong = 255;
-	//if (x == 0) printf("input: %f\n", input[index]);
+	float high = 80, low = 30, weak = 50, strong = 255;
+	
 	if (input[index] >= high) { //strong
 		output[index] = strong;
 	} else if (input[index] <= high && input[index] >= low) { //weak
@@ -164,7 +163,6 @@ __global__ void doubleThreshold(unsigned char *output,
 	} else { //non-relevent
 		output[index] = 0;
 	}
-	//printf("output: %f\n", output[index]);
 }
 
 __global__ void histeresis(unsigned char *input, 
@@ -173,10 +171,26 @@ __global__ void histeresis(unsigned char *input,
 						   unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
-	if (x >= cols - 1 || y >= rows - 1 || x < 1 || y < 1)
+	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
 		return;
 	int index = y * cols + x;
-
+	
+	float weak = 50, strong = 255;
+	
+	if (input[index] == weak) { // if current pixel is weak
+		if ((input[y * cols + (x + 1)] == strong) || 
+			(input[y * cols + (x - 1)] == strong) || 
+			(input[(y + 1) * cols + (x - 1)] == strong) || 
+			(input[(y - 1) * cols + (x + 1)] == strong) ||
+			(input[(y + 1) * cols + x] == strong) || 
+			(input[(y - 1) * cols + x] == strong) ||
+			(input[(y - 1) * cols + (x - 1)] == strong) || 
+			(input[(y + 1) * cols + (x + 1)] == strong)) // if a surrounding pixel is greater than a weak pixel value
+			output[index] = strong; // set the weak pixel to strong
+		else {
+			output[index] = 0; // otherwise, set the pixel to be non-relevant
+		}
+	}
 }
 
 void edgeDetector (unsigned char* h_input,
@@ -220,9 +234,12 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemcpy(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice));
 	checkCuda(cudaMemcpy(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice));
-	printf("rows: %d cols: %d gridx: %d gridy: %d\n", rows, cols, gridX, gridY);
+
+	printf("The image has: rows= %d cols= %d\nKernels grid dimensions: gridx=" 
+			"%d gridy= %d\nKernels block dimensions: blockx= %d blocky= %d\n", 
+			rows, cols, gridX, gridY, TILE_SIZE, TILE_SIZE);
 	
-	//*** Canney Edge Detector ***//
+	//*** Canny Edge Detector Algorithm ***//
 
 	// 1) Noise Reduction with Gaussian Blur (not working now)
 	//gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
@@ -231,15 +248,17 @@ void edgeDetector (unsigned char* h_input,
 	sobelFilter<<<dimGrid, dimBlock>>>(/*d_output_blur*/d_input, d_output_sobel, d_edge_magnitude, d_edge_direction, d_sobel_mask_x, d_sobel_mask_y, rows, cols);
 
 	// 3) Non-Maximum Suppression
-	nonMaxSuppression<<<dimGrid, dimBlock>>>(d_output_nms, d_output_sobel, d_edge_direction, rows, cols);
+	nonMaxSuppression<<<dimGrid, dimBlock>>>(d_output_sobel, d_output_nms, d_edge_direction, rows, cols);
 
 	// 4) Double threshold
-	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_thresh, d_output_nms, rows, cols);
+	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_nms, d_output_thresh, rows, cols);
 
-	// 5) Hysteresis
-	histeresis<<<dimGrid, dimBlock>>>(d_output, d_output_thresh, rows, cols);
+	// 5) Hysteresis (only call if needed)
+	//histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
 
-	//copy final output to host
+	//*** Edge Detection Finished ***//
+
+	//copy final output image to host
 	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
