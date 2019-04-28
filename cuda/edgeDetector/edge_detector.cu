@@ -38,28 +38,45 @@ __global__ void gaussianBlur(unsigned char *input,
 	
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
-	if (x >= cols || y >= rows)
+	if (x > cols || y > rows)
 		return;
 	int index = y * cols + x;
 	
-	float result = 0.0;
-	for (int fx = 0; fx < filter_width; fx++) {
-		for (int fy = 0; fy < filter_width; fy++) {
-			int imagex = x + fx - filter_width / 2;
-			int imagey = y + fy - filter_width / 2;
-			imagex = min(max(imagex, 0), cols - 1);
-			imagey = min(max(imagey, 0), rows - 1);
-			printf("filter width: %d fx: %d fy %d\n", filter_width, fx, fy);
-			//printf("imagex = %d imagey = %d\n", imagex, imagey);
-			//printf("x = %d y = %d\n", fy * filter_width + fx, imagey * cols + imagex);
-			//float image_value = (float)input[imagey * cols + imagex];
-			//float filter_value = (float)filter[fy * filter_width + fx];
-			//printf("result: %f\n", image_value * filter_value);
-			//result += image_value * filter_value;		
+	float pixel_value = 0.0, result = 0.0;
+	int pixels;
+	
+	// Blur algorithm using average value of surrounding pixels (not recommended)
+	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
+		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
+			int cur_row = r + y; 
+			int cur_col = c + x;
+			//if pixel is not at the edge of the image
+			if ((cur_row > -1) && (cur_row < rows) &&
+				(cur_col > -1) && (cur_col < cols)) { 
+				pixel_value += input[cur_row * cols + cur_col];
+				pixels++;
+			}
 		}
 	}
-	printf("pixel value: %f ", result);	
+	result = pixel_value / (float)pixels;
 	output[index] = result;
+
+	// Blur algorthm using weighted average (recommended)
+	/*for (int r = -filter_width / 2; r < filter_width / 2; r++) {
+		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
+			int cur_row = r + y; 
+			int cur_col = c + x;
+			//if pixel is not at the edge of the image
+			if ((cur_row > -1) && (cur_row < rows) &&
+				(cur_col > -1) && (cur_col < cols)) { 
+				int filterid = (r + filter_width / 2) * filterWidth + (c + filter_width / 2);	
+				printf("d_filter value[%d]: %f\n", filterid, filter[0]);
+				result += input[cur_row * cols + cur_col] * filter[r * filter_width + c]; 
+			}
+		}
+	}
+	result = pixel_value / (float)pixels;
+	output[index] = result;*/
 }
 
 __global__ void sobelFilter(unsigned char *input, 
@@ -154,7 +171,7 @@ __global__ void doubleThreshold(unsigned char *input,
 		return;
 	int index = y * cols + x;
 
-	float high = 80, low = 30, weak = 50, strong = 255;
+	float high = 50, low = 20, weak = 50, strong = 255;
 	
 	if (input[index] >= high) { //strong
 		output[index] = strong;
@@ -185,7 +202,7 @@ __global__ void histeresis(unsigned char *input,
 			(input[(y + 1) * cols + x] == strong) || 
 			(input[(y - 1) * cols + x] == strong) ||
 			(input[(y - 1) * cols + (x - 1)] == strong) || 
-			(input[(y + 1) * cols + (x + 1)] == strong)) // if a surrounding pixel is greater than a weak pixel value
+			(input[(y + 1) * cols + (x + 1)] == strong)) // if a surrounding pixel is strong
 			output[index] = strong; // set the weak pixel to strong
 		else {
 			output[index] = 0; // otherwise, set the pixel to be non-relevant
@@ -242,10 +259,10 @@ void edgeDetector (unsigned char* h_input,
 	//*** Canny Edge Detector Algorithm ***//
 
 	// 1) Noise Reduction with Gaussian Blur (not working now)
-	//gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
+	gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
 
 	// 2) Gradient Calulation with Sobel Filter
-	sobelFilter<<<dimGrid, dimBlock>>>(/*d_output_blur*/d_input, d_output_sobel, d_edge_magnitude, d_edge_direction, d_sobel_mask_x, d_sobel_mask_y, rows, cols);
+	sobelFilter<<<dimGrid, dimBlock>>>(d_output_blur, d_output_sobel, d_edge_magnitude, d_edge_direction, d_sobel_mask_x, d_sobel_mask_y, rows, cols);
 
 	// 3) Non-Maximum Suppression
 	nonMaxSuppression<<<dimGrid, dimBlock>>>(d_output_sobel, d_output_nms, d_edge_direction, rows, cols);
@@ -254,7 +271,7 @@ void edgeDetector (unsigned char* h_input,
 	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_nms, d_output_thresh, rows, cols);
 
 	// 5) Hysteresis (only call if needed)
-	//histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
+	histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
 
 	//*** Edge Detection Finished ***//
 

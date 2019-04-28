@@ -41,7 +41,6 @@ int main( int argc, const char** argv ) {
     } 
     unsigned int rows = input_image.rows;
     unsigned int cols = input_image.cols;
-    int size = rows * cols;
 
 	Mat output_image = Mat::zeros(rows, cols, CV_8U);
 
