@@ -32,13 +32,8 @@ __global__ void gaussianBlur(unsigned char *input,
 		return;
 	int index = y * cols + x;
 
-	float pixel_value = 0.0, result = 0.0;
-	int pixels;
-
-	//test
-	//output[index] = input[index];
-
-	// Blur algorithm using average value of surrounding pixels (not recommended)
+	// Blur algorthm using weighted average (recommended)
+	float result = 0.0;
 	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
 		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
 			int cur_row = r + y; 
@@ -46,12 +41,11 @@ __global__ void gaussianBlur(unsigned char *input,
 			//if pixel is not at the edge of the image
 			if ((cur_row > -1) && (cur_row < rows) &&
 				(cur_col > -1) && (cur_col < cols)) { 
-				pixel_value += input[cur_row * cols + cur_col];
-				pixels++;
+				int filter_id = (r + filter_width / 2) * filter_width + (c + filter_width / 2);	
+				result += input[cur_row * cols + cur_col] * filter[filter_id]; 
 			}
 		}
 	}
-	result = pixel_value / (float)pixels;
 	output[index] = result;
 }
 
@@ -72,6 +66,7 @@ void imageBlur (unsigned char* h_input,
 	int size = rows * cols;
 	checkCuda(cudaMalloc((void**)&d_input, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output, size * sizeof(unsigned char)));
+	checkCuda(cudaMalloc((void**)&d_filter, filter_width * filter_width * sizeof(float)));
 	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemcpy(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice));
 	checkCuda(cudaMemcpy(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice));

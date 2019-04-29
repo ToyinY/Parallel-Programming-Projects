@@ -47,5 +47,5 @@ $(TARGET).o: $(TARGET).cu
 	$(NVCC) $(NVCCFLAGS) -dc $< -o $@ $(GENCODE_FLAGS) 
 	
 clean:
-	$(RM) $(TARGET) *.o *.o *.tar* *.core* *out*.jpg 
+	$(RM) $(TARGET) *.o *.o *.tar* *.core*  
 
