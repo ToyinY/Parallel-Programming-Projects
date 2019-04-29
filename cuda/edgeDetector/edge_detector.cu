@@ -42,10 +42,10 @@ __global__ void gaussianBlur(unsigned char *input,
 		return;
 	int index = y * cols + x;
 	
-	float pixel_value = 0.0, result = 0.0;
+	// Blur algorithm using average value of surrounding pixels (not recommended)
+	/*float pixel_value = 0.0, result = 0.0;
 	int pixels;
 	
-	// Blur algorithm using average value of surrounding pixels (not recommended)
 	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
 		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
 			int cur_row = r + y; 
@@ -59,24 +59,23 @@ __global__ void gaussianBlur(unsigned char *input,
 		}
 	}
 	result = pixel_value / (float)pixels;
-	output[index] = result;
+	output[index] = result;*/
 
 	// Blur algorthm using weighted average (recommended)
-	/*for (int r = -filter_width / 2; r < filter_width / 2; r++) {
+	float result = 0.0;
+	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
 		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
 			int cur_row = r + y; 
 			int cur_col = c + x;
 			//if pixel is not at the edge of the image
 			if ((cur_row > -1) && (cur_row < rows) &&
 				(cur_col > -1) && (cur_col < cols)) { 
-				int filterid = (r + filter_width / 2) * filterWidth + (c + filter_width / 2);	
-				printf("d_filter value[%d]: %f\n", filterid, filter[0]);
-				result += input[cur_row * cols + cur_col] * filter[r * filter_width + c]; 
+				int filter_id = (r + filter_width / 2) * filter_width + (c + filter_width / 2);	
+				result += input[cur_row * cols + cur_col] * filter[filter_id]; 
 			}
 		}
 	}
-	result = pixel_value / (float)pixels;
-	output[index] = result;*/
+	output[index] = result;
 }
 
 __global__ void sobelFilter(unsigned char *input, 
@@ -171,7 +170,7 @@ __global__ void doubleThreshold(unsigned char *input,
 		return;
 	int index = y * cols + x;
 
-	float high = 50, low = 20, weak = 50, strong = 255;
+	float high = 70, low = 20, weak = 50, strong = 255;
 	
 	if (input[index] >= high) { //strong
 		output[index] = strong;
@@ -231,12 +230,12 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMalloc((void**)&d_output_blur, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output_sobel, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output_nms, size * sizeof(unsigned char)));
-	checkCuda(cudaMalloc((void**)&d_output_sobel, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_output_thresh, size * sizeof(unsigned char)));
 	checkCuda(cudaMalloc((void**)&d_edge_direction, size * sizeof(double)));
 	checkCuda(cudaMalloc((void**)&d_edge_magnitude, size * sizeof(float)));
 	checkCuda(cudaMalloc((void**)&d_sobel_mask_x, filter_width * sizeof(double)));
 	checkCuda(cudaMalloc((void**)&d_sobel_mask_y, filter_width * sizeof(double)));
+	checkCuda(cudaMalloc((void**)&d_filter, filter_width * filter_width * sizeof(float)));
 	checkCuda(cudaMalloc((void**)&d_output, size * sizeof(unsigned char)));
 
 	// copy to GPU
@@ -271,11 +270,11 @@ void edgeDetector (unsigned char* h_input,
 	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_nms, d_output_thresh, rows, cols);
 
 	// 5) Hysteresis (only call if needed)
-	histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
+	//histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
 
 	//*** Edge Detection Finished ***//
 
-	//copy final output image to host
+	// copy final output image to host (output of doubleThreshold)
 	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
