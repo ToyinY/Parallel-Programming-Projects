@@ -28,21 +28,31 @@ __global__ void gaussianBlur(unsigned char *input,
 	
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
-	if (x >= cols || y >= rows)
+	if (x > cols || y > rows)
 		return;
-	int index = y * rows + x;
-	printf("thread: %d reached\n", index);
-	float c = 0.0f;
-	for (int fx = 0; x < filter_width; x++) {
-		for (int fy = 0; fy < filter_width; y++) {
-			int imagex = x + fx - filter_width / 2;
-			int imagey = y + fy - filter_width / 2;
-			imagex = min(max(imagex, 0), cols - 1);
-			imagey = min(max(imagey, 0), rows - 1);
-			c += (filter[fy * filter_width + fx] * input[imagey * cols + imagex]);
+	int index = y * cols + x;
+
+	float pixel_value = 0.0, result = 0.0;
+	int pixels;
+
+	//test
+	//output[index] = input[index];
+
+	// Blur algorithm using average value of surrounding pixels (not recommended)
+	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
+		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
+			int cur_row = r + y; 
+			int cur_col = c + x;
+			//if pixel is not at the edge of the image
+			if ((cur_row > -1) && (cur_row < rows) &&
+				(cur_col > -1) && (cur_col < cols)) { 
+				pixel_value += input[cur_row * cols + cur_col];
+				pixels++;
+			}
 		}
-	}	
-	output[index] = c;
+	}
+	result = pixel_value / (float)pixels;
+	output[index] = result;
 }
 
 void imageBlur (unsigned char* h_input,
@@ -65,7 +75,7 @@ void imageBlur (unsigned char* h_input,
 	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemcpy(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice));
 	checkCuda(cudaMemcpy(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice));
-	printf("rows: %d cols: %d gridx: %d gridy: %d\n", rows, cols, gridX, gridY);
+		
 	//kernel call
 	gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output, rows, cols, d_filter, filter_width);
 

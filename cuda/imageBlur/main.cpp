@@ -59,12 +59,11 @@ int main( int argc, const char** argv ) {
 	// create filter for gaussian blur
 	const int blurKernelWidth = 9;
   	const float blurKernelSigma = 2.;
-
   	int filter_width = blurKernelWidth;
 
-  	//create and fill the filter we will convolve with
+  	//create and fill the filter to convolve with
   	h_filter = (float*) malloc(filter_width * filter_width * sizeof(float));
-  	float filterSum = 0.f; //for normalization
+  	float filterSum = 0.f; 
   	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
     	for (int c = -blurKernelWidth/2; c <= blurKernelWidth/2; ++c) {
       		float filterValue = expf( -(float)(c * c + r * r) / (2.f * blurKernelSigma * blurKernelSigma));
