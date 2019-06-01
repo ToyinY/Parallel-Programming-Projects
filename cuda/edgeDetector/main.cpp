@@ -88,7 +88,7 @@ int main( int argc, const char** argv ) {
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
 	// write final image
-	imwrite ("output.jpg", output_image);
+	imwrite ("Output-Images/output.jpg", output_image);
 
     return 0;
 }
