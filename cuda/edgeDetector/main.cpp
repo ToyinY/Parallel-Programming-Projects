@@ -34,7 +34,7 @@ extern void edgeDetector (unsigned char *h_input,
 int main( int argc, const char** argv ) {
         
     // Read input image 
-    Mat input_image = imread("input.jpg", IMREAD_GRAYSCALE);
+    Mat input_image = imread("Input-Images/input.jpg", IMREAD_GRAYSCALE);
     if (input_image.empty()){
         cout << "Image cannot be loaded..!!" << endl;
         return -1;
