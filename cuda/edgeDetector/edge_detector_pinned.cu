@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <cuda.h>
 #include <time.h>
-#include <math.h>
 
 #define TILE_SIZE 16
 
@@ -246,34 +245,20 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMemset(d_output_thresh, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_magnitude, 0, size * sizeof(float)));
 
-	// allocate pinned host arrays
+	// allocate pinned host array
 	unsigned char *h_input_pinned;
-	float *h_filter_pinned;
-	float *h_sobel_mask_x_pinned;
-	float *h_sobel_mask_y_pinned;
 	checkCuda(cudaMallocHost((void**)&h_input_pinned, size * sizeof(unsigned char)));
-	checkCuda(cudaMallocHost((void**)&h_filter_pinned, filter_width * filter_width * sizeof(float)));
-	checkCuda(cudaMallocHost((void**)&h_sobel_mask_x_pinned, filter_width * sizeof(float)));
-	checkCuda(cudaMallocHost((void**)&h_sobel_mask_y_pinned, filter_width * sizeof(float)));
 	memcpy(h_input_pinned, h_input, size * sizeof(unsigned char));
-	memcpy(h_filter_pinned, h_filter, filter_width * filter_width * sizeof(float));
-	memcpy(h_sobel_mask_x_pinned, h_sobel_mask_x, filter_width * sizeof(float));
-	memcpy(h_sobel_mask_y_pinned, h_sobel_mask_y, filter_width * sizeof(float));
 
 	// copy to GPU with streams
 	cudaStream_t s1, s2;
 	cudaStreamCreate(&s1);
 	cudaStreamCreate(&s2);
 
-	/*checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice, s1));	
+	checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice, s1));	
 	checkCuda(cudaMemcpyAsync(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
 	checkCuda(cudaMemcpyAsync(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice, s1));
 	checkCuda(cudaMemcpyAsync(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
-	cudaDeviceSynchronize();*/
-	checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x_pinned, filter_width * sizeof(float), cudaMemcpyHostToDevice, s1));	
-	checkCuda(cudaMemcpyAsync(d_sobel_mask_y, h_sobel_mask_y_pinned, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
-	checkCuda(cudaMemcpyAsync(d_input, h_input_pinned, size * sizeof(unsigned char), cudaMemcpyHostToDevice, s1));
-	checkCuda(cudaMemcpyAsync(d_filter, h_filter_pinned, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
 	cudaDeviceSynchronize();
 
 	// destroy streams
@@ -309,14 +294,10 @@ void edgeDetector (unsigned char* h_input,
 	//*** Edge Detection Finished ***//
 
 	// copy final output image to host (use correct output)
-	//checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
 	checkCuda(cudaFreeHost(h_input_pinned));
-	checkCuda(cudaFreeHost(h_filter_pinned));
-	checkCuda(cudaFreeHost(h_sobel_mask_x_pinned));
-	checkCuda(cudaFreeHost(h_sobel_mask_y_pinned));
 	checkCuda(cudaFree(d_input));
 	checkCuda(cudaFree(d_output_blur));
 	checkCuda(cudaFree(d_output_nms));
