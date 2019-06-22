@@ -11,6 +11,16 @@
 using namespace cv;
 using namespace std;
 
+inline cudaError_t checkCuda(cudaError_t result) {
+     #if defined(DEBUG) || defined(_DEBUG)
+         if (result != cudaSuccess) {
+             fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result    ));
+             exit(-1);
+         }
+     #endif
+         return result;
+}
+
 // Timer function
 double CLOCK() {
 	struct timespec t;
@@ -49,6 +59,7 @@ int main( int argc, const char** argv ) {
 
   	//create and fill the filter to convolve with
     float *h_filter;
+    float *h_filter_pinned;
   	h_filter = (float*) malloc(filter_width * filter_width * sizeof(float));
   	float filterSum = 0.f; 
   	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
@@ -67,6 +78,7 @@ int main( int argc, const char** argv ) {
 
   	// init and create sobel masks
   	float *h_sobel_mask_x, *h_sobel_mask_y;
+    float *h_sobel_mask_x_pinned, *h_sobel_mask_y_pinned;
   	h_sobel_mask_x = (float*)malloc(filter_width * sizeof(float));
   	h_sobel_mask_y = (float*)malloc(filter_width * sizeof(float));
   	h_sobel_mask_x[0] = 1.0; h_sobel_mask_x[1] = 0.0; h_sobel_mask_x[2] = -1.0;
@@ -76,12 +88,20 @@ int main( int argc, const char** argv ) {
   	h_sobel_mask_y[3] =  0.0; h_sobel_mask_y[4] =  0.0; h_sobel_mask_y[5] =  0.0;
   	h_sobel_mask_y[6] =  1.0; h_sobel_mask_y[7] =  2.0; h_sobel_mask_y[8] =  1.0;
 
+    //allocate copy to pinned buffers
+    checkCuda(cudaMallocHost((void**)&h_filter_pinned, filter_width * filter_width * sizeof(float)));
+	checkCuda(cudaMallocHost((void**)&h_sobel_mask_x_pinned, filter_width * sizeof(float)));
+	checkCuda(cudaMallocHost((void**)&h_sobel_mask_y_pinned, filter_width * sizeof(float)));
+	memcpy(h_filter_pinned, h_filter, filter_width * filter_width * sizeof(float));
+	memcpy(h_sobel_mask_x_pinned, h_sobel_mask_x, filter_width * sizeof(float));
+	memcpy(h_sobel_mask_y_pinned, h_sobel_mask_y, filter_width * sizeof(float));
+
 	// call and time gpu function
 	double start = CLOCK();
 	edgeDetector((unsigned char *)input_image.data,
 			     (unsigned char *)output_image.data,
-			     rows, cols, h_filter, filter_width,
-               	 h_sobel_mask_x, h_sobel_mask_y);
+			     rows, cols, h_filter_pinned, filter_width,
+               	 h_sobel_mask_x_pinned, h_sobel_mask_y_pinned);
 	double end = CLOCK();
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
@@ -92,6 +112,9 @@ int main( int argc, const char** argv ) {
 	free(h_filter);
 	free(h_sobel_mask_x);
 	free(h_sobel_mask_y);
+  	checkCuda(cudaFreeHost(h_filter_pinned));
+  	checkCuda(cudaFreeHost(h_sobel_mask_x_pinned));
+  	checkCuda(cudaFreeHost(h_sobel_mask_y_pinned));
 
     return 0;
 }

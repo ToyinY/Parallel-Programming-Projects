@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <cuda.h>
 #include <time.h>
-#include <math.h>
 
 #define TILE_SIZE 16
 
@@ -210,13 +209,13 @@ __global__ void histeresis(unsigned char *input,
 }
 
 void edgeDetector (unsigned char* h_input,
-			    unsigned char* h_output,
-				unsigned int rows,
-			    unsigned int cols,
-				float* h_filter,
-				int filter_width,
-				float *h_sobel_mask_x,
-				float *h_sobel_mask_y) {
+				   unsigned char* h_output,
+				   unsigned int rows,
+			       unsigned int cols,
+				   float* h_filter,
+				   int filter_width,
+				   float *h_sobel_mask_x,
+				   float *h_sobel_mask_y) {
 
 	// block and grid size
 	int gridX = 1 + ((cols - 1) / TILE_SIZE);
@@ -238,18 +237,33 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMalloc((void**)&d_filter, filter_width * filter_width * sizeof(float)));
 	checkCuda(cudaMalloc((void**)&d_output, size * sizeof(unsigned char)));
 
-	// copy to GPU
+	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_output_blur, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_output_nms, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_direction, 0, size * sizeof(double)));
 	checkCuda(cudaMemset(d_output_sobel, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_output_thresh, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_magnitude, 0, size * sizeof(float)));
-	checkCuda(cudaMemcpy(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice));	
-	checkCuda(cudaMemcpy(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice));
-	checkCuda(cudaMemset(d_output, 0, size * sizeof(unsigned char)));
-	checkCuda(cudaMemcpy(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice));
-	checkCuda(cudaMemcpy(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice));
+
+	// allocate pinned host array
+	unsigned char *h_input_pinned;
+	checkCuda(cudaMallocHost((void**)&h_input_pinned, size * sizeof(unsigned char)));
+	memcpy(h_input_pinned, h_input, size * sizeof(unsigned char));
+
+	// copy to GPU with streams
+	cudaStream_t s1, s2;
+	cudaStreamCreate(&s1);
+	cudaStreamCreate(&s2);
+
+	checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice, s1));	
+	checkCuda(cudaMemcpyAsync(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
+	checkCuda(cudaMemcpyAsync(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice, s1));
+	checkCuda(cudaMemcpyAsync(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
+	cudaDeviceSynchronize();
+
+	// destroy streams
+	cudaStreamDestroy(s1);
+	cudaStreamDestroy(s2);
 
 	printf("The image has: rows= %d cols= %d\nKernels grid dimensions: gridx=" 
 			"%d gridy= %d\nKernels block dimensions: blockx= %d blocky= %d\n", 
@@ -257,27 +271,33 @@ void edgeDetector (unsigned char* h_input,
 	
 	//*** Canny Edge Detector Algorithm ***//
 
-	// 1) Noise Reduction with Gaussian Blur (not working now)
+	// 1) Noise Reduction with Gaussian Blur
 	gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
+	cudaDeviceSynchronize();
 
 	// 2) Gradient Calulation with Sobel Filter
 	sobelFilter<<<dimGrid, dimBlock>>>(d_output_blur, d_output_sobel, d_edge_magnitude, d_edge_direction, d_sobel_mask_x, d_sobel_mask_y, rows, cols);
+	cudaDeviceSynchronize();
 
 	// 3) Non-Maximum Suppression
 	nonMaxSuppression<<<dimGrid, dimBlock>>>(d_output_sobel, d_output_nms, d_edge_direction, rows, cols);
+	cudaDeviceSynchronize();
 
 	// 4) Double threshold
 	doubleThreshold<<<dimGrid, dimBlock>>>(d_output_nms, d_output_thresh, rows, cols);
+	cudaDeviceSynchronize();
 
 	// 5) Hysteresis (only call if needed)
-	//histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
+	//histeresis<<<dimGrid, dimBlock, s1>>>(d_output_thresh, d_output, rows, cols);
+	//cudaDeviceSynchronize();
 
 	//*** Edge Detection Finished ***//
 
-	// copy final output image to host (output of doubleThreshold)
+	// copy final output image to host (use correct output)
 	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
+	checkCuda(cudaFreeHost(h_input_pinned));
 	checkCuda(cudaFree(d_input));
 	checkCuda(cudaFree(d_output_blur));
 	checkCuda(cudaFree(d_output_nms));
