@@ -2,17 +2,24 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 
-#include <stdint.h>
 #include <stdio.h>
-#include <cstdlib>
-#include <iostream>
-#include <ctime>
 #include <cuda.h>
 #include <stdlib.h>
 #include <time.h>
+#include <cuda_runtime_api.h>
 
 using namespace cv;
 using namespace std;
+
+inline cudaError_t checkCuda(cudaError_t result) {
+     #if defined(DEBUG) || defined(_DEBUG)
+         if (result != cudaSuccess) {
+             fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result    ));
+             exit(-1);
+         }
+     #endif
+         return result;
+}
 
 // Timer function
 double CLOCK() {
