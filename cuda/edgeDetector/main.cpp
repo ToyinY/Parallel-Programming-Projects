@@ -29,12 +29,13 @@ extern void edgeDetector (unsigned char *h_input,
 					  	  float *h_filter,
 					  	  int filter_width,
             			  float *h_sobel_mask_x,
-                    float *h_sobel_mask_y);
+						  float *h_sobel_mask_y);
 
 int main( int argc, const char** argv ) {
         
     // Read input image 
-    Mat input_image = imread("Input-Images/input.jpg", IMREAD_GRAYSCALE);
+    const char *path = "Input-Images/input_us.jpg";
+    Mat input_image = imread(path, IMREAD_GRAYSCALE);
     if (input_image.empty()){
         cout << "Image cannot be loaded..!!" << endl;
         return -1;
@@ -88,7 +89,12 @@ int main( int argc, const char** argv ) {
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
 	// write final image
-	imwrite ("Output-Images/output.jpg", output_image);
+	imwrite ("Output-Images/output_us.jpg", output_image);
+
+	// free memory
+	free(h_filter);
+	free(h_sobel_mask_x);
+	free(h_sobel_mask_y);
 
     return 0;
 }
