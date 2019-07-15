@@ -41,32 +41,13 @@ __global__ void gaussianBlur(unsigned char *input,
 		return;
 	int index = y * cols + x;
 	
-	// Blur algorithm using average value of surrounding pixels (not recommended)
-	/*float pixel_value = 0.0, result = 0.0;
-	int pixels;
-	
-	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
-		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
-			int cur_row = r + y; 
-			int cur_col = c + x;
-			//if pixel is not at the edge of the image
-			if ((cur_row > -1) && (cur_row < rows) &&
-				(cur_col > -1) && (cur_col < cols)) { 
-				pixel_value += input[cur_row * cols + cur_col];
-				pixels++;
-			}
-		}
-	}
-	result = pixel_value / (float)pixels;
-	output[index] = result;*/
-
-	// Blur algorthm using weighted average (recommended)
+	// Blur algorthm using weighted average
 	float result = 0.0;
 	for (int r = -filter_width / 2; r < filter_width / 2; r++) {
 		for (int c = -filter_width / 2; c < filter_width / 2; c++) {
 			int cur_row = r + y; 
 			int cur_col = c + x;
-			//if pixel is not at the edge of the image
+			
 			if ((cur_row > -1) && (cur_row < rows) &&
 				(cur_col > -1) && (cur_col < cols)) { 
 				int filter_id = (r + filter_width / 2) * filter_width + (c + filter_width / 2);	
@@ -75,6 +56,43 @@ __global__ void gaussianBlur(unsigned char *input,
 		}
 	}
 	output[index] = result;
+}
+
+__global__ void medianFilter(unsigned char *input,
+							 unsigned char *output,
+							 unsigned int rows,
+							 unsigned int cols){
+	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
+	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
+	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
+		return;
+	int index = y * cols + x;
+
+	// Array of pixels to sort
+	float pixels[9];
+	pixels[0] = input[y * cols + (x + 1)];
+	pixels[1] = input[y * cols + (x - 1)];
+	pixels[2] = input[(y + 1) * cols + (x - 1)];
+	pixels[3] = input[(y - 1) * cols + (x + 1)];
+	pixels[4] = input[(y + 1) * cols + x];
+	pixels[5] = input[(y - 1) * cols + x];
+	pixels[6] = input[(y - 1) * cols + (x - 1)];
+	pixels[7] = input[(y + 1) * cols + (x + 1)];
+	pixels[8] = input[index];
+
+	// sort pixel values with insertion sort
+	int i, j;
+	float temp;
+	for (i = 0; i < 9; i++) {
+		temp = pixels[i];
+		for (j = i - 1; j >= 0 && temp < pixels[j]; j--) {
+			pixels[j + 1] = pixels[j];
+		}
+		pixels[j + 1] = temp;
+	}	
+
+	// Assign output pixel to median pixel value
+	output[index] = pixels[4];
 }
 
 __global__ void sobelFilter(unsigned char *input, 
@@ -245,25 +263,24 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMemset(d_output_thresh, 0, size * sizeof(unsigned char)));
 	checkCuda(cudaMemset(d_edge_magnitude, 0, size * sizeof(float)));
 
-	// allocate pinned host array
-	unsigned char *h_input_pinned;
-	checkCuda(cudaMallocHost((void**)&h_input_pinned, size * sizeof(unsigned char)));
-	memcpy(h_input_pinned, h_input, size * sizeof(unsigned char));
-
 	// copy to GPU with streams
-	cudaStream_t s1, s2;
+	cudaStream_t s1, s2, s3, s4;
 	cudaStreamCreate(&s1);
 	cudaStreamCreate(&s2);
+	cudaStreamCreate(&s3);
+	cudaStreamCreate(&s4);
 
-	checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice, s1));	
-	checkCuda(cudaMemcpyAsync(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
 	checkCuda(cudaMemcpyAsync(d_input, h_input, size * sizeof(unsigned char), cudaMemcpyHostToDevice, s1));
+	checkCuda(cudaMemcpyAsync(d_sobel_mask_x, h_sobel_mask_x, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));	
+	checkCuda(cudaMemcpyAsync(d_sobel_mask_y, h_sobel_mask_y, filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
 	checkCuda(cudaMemcpyAsync(d_filter, h_filter, filter_width * filter_width * sizeof(float), cudaMemcpyHostToDevice, s2));
 	cudaDeviceSynchronize();
 
 	// destroy streams
 	cudaStreamDestroy(s1);
 	cudaStreamDestroy(s2);
+	cudaStreamDestroy(s3);
+	cudaStreamDestroy(s4);
 
 	printf("The image has: rows= %d cols= %d\nKernels grid dimensions: gridx=" 
 			"%d gridy= %d\nKernels block dimensions: blockx= %d blocky= %d\n", 
@@ -274,6 +291,9 @@ void edgeDetector (unsigned char* h_input,
 	// 1) Noise Reduction with Gaussian Blur
 	gaussianBlur<<<dimGrid, dimBlock>>>(d_input, d_output_blur, rows, cols, d_filter, filter_width);
 	cudaDeviceSynchronize();
+
+	// Alternative noise reduction algorithm for ultra sound images
+	//medianFilter<<<dimGrid, dimBlock>>>(d_input, d_output, rows, cols);
 
 	// 2) Gradient Calulation with Sobel Filter
 	sobelFilter<<<dimGrid, dimBlock>>>(d_output_blur, d_output_sobel, d_edge_magnitude, d_edge_direction, d_sobel_mask_x, d_sobel_mask_y, rows, cols);
@@ -288,8 +308,8 @@ void edgeDetector (unsigned char* h_input,
 	cudaDeviceSynchronize();
 
 	// 5) Hysteresis (only call if needed)
-	//histeresis<<<dimGrid, dimBlock, s1>>>(d_output_thresh, d_output, rows, cols);
-	//cudaDeviceSynchronize();
+	/*histeresis<<<dimGrid, dimBlock, s1>>>(d_output_thresh, d_output, rows, cols);
+	cudaDeviceSynchronize();*/
 
 	//*** Edge Detection Finished ***//
 
@@ -297,7 +317,6 @@ void edgeDetector (unsigned char* h_input,
 	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
-	checkCuda(cudaFreeHost(h_input_pinned));
 	checkCuda(cudaFree(d_input));
 	checkCuda(cudaFree(d_output_blur));
 	checkCuda(cudaFree(d_output_nms));

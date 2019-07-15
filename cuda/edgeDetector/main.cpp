@@ -14,7 +14,7 @@ using namespace std;
 inline cudaError_t checkCuda(cudaError_t result) {
      #if defined(DEBUG) || defined(_DEBUG)
          if (result != cudaSuccess) {
-             fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result    ));
+             fprintf(stderr, "CUDA Runtime Error: %s\n", cudaGetErrorString(result));
              exit(-1);
          }
      #endif
@@ -41,10 +41,10 @@ extern void edgeDetector (unsigned char *h_input,
 int main( int argc, const char** argv ) {
         
     // Read input image 
-    const char *path = "Input-Images/input_us.jpg";
+    const char *path = "Input-Images/input_rdj.jpg";
     Mat input_image = imread(path, IMREAD_GRAYSCALE);
     if (input_image.empty()){
-        cout << "Image cannot be loaded..!!" << endl;
+        cout << "Image cannot be loaded." << endl;
         return -1;
     } 
     unsigned int rows = input_image.rows;
@@ -77,7 +77,8 @@ int main( int argc, const char** argv ) {
   	}
 
   	// init and create sobel masks
-  	float *h_sobel_mask_x, *h_sobel_mask_y;
+  	unsigned char *h_input_pinned;
+    float *h_sobel_mask_x, *h_sobel_mask_y;
     float *h_sobel_mask_x_pinned, *h_sobel_mask_y_pinned;
   	h_sobel_mask_x = (float*)malloc(filter_width * sizeof(float));
   	h_sobel_mask_y = (float*)malloc(filter_width * sizeof(float));
@@ -88,17 +89,19 @@ int main( int argc, const char** argv ) {
   	h_sobel_mask_y[3] =  0.0; h_sobel_mask_y[4] =  0.0; h_sobel_mask_y[5] =  0.0;
   	h_sobel_mask_y[6] =  1.0; h_sobel_mask_y[7] =  2.0; h_sobel_mask_y[8] =  1.0;
 
-    //allocate copy to pinned buffers
+    //allocate and copy to pinned buffers
+    checkCuda(cudaMallocHost((void**)&h_input_pinned, rows * cols * sizeof(unsigned char)));
     checkCuda(cudaMallocHost((void**)&h_filter_pinned, filter_width * filter_width * sizeof(float)));
 	checkCuda(cudaMallocHost((void**)&h_sobel_mask_x_pinned, filter_width * sizeof(float)));
 	checkCuda(cudaMallocHost((void**)&h_sobel_mask_y_pinned, filter_width * sizeof(float)));
+	memcpy(h_input_pinned, (unsigned char *)input_image.data, rows * cols * sizeof(unsigned char));
 	memcpy(h_filter_pinned, h_filter, filter_width * filter_width * sizeof(float));
 	memcpy(h_sobel_mask_x_pinned, h_sobel_mask_x, filter_width * sizeof(float));
 	memcpy(h_sobel_mask_y_pinned, h_sobel_mask_y, filter_width * sizeof(float));
 
 	// call and time gpu function
 	double start = CLOCK();
-	edgeDetector((unsigned char *)input_image.data,
+	edgeDetector(h_input_pinned,
 			     (unsigned char *)output_image.data,
 			     rows, cols, h_filter_pinned, filter_width,
                	 h_sobel_mask_x_pinned, h_sobel_mask_y_pinned);
@@ -106,12 +109,13 @@ int main( int argc, const char** argv ) {
 	cout << "GPU execution time: " << end - start << "ms" << endl;
 
 	// write final image
-	imwrite ("Output-Images/output_us.jpg", output_image);
+	imwrite ("Output-Images/output_rdj.jpg", output_image);
 
 	// free memory
 	free(h_filter);
 	free(h_sobel_mask_x);
 	free(h_sobel_mask_y);
+	checkCuda(cudaFreeHost(h_input_pinned));
   	checkCuda(cudaFreeHost(h_filter_pinned));
   	checkCuda(cudaFreeHost(h_sobel_mask_x_pinned));
   	checkCuda(cudaFreeHost(h_sobel_mask_y_pinned));
