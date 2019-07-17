@@ -31,12 +31,12 @@ double CLOCK() {
 // gpu function
 extern void edgeDetector (unsigned char *h_input,
 	                  	  unsigned char *h_output,
-       			      	  unsigned int rows,
-       			      	  unsigned int cols,
-					  	  float *h_filter,
-					  	  int filter_width,
-            			  float *h_sobel_mask_x,
-						  float *h_sobel_mask_y);
+       			  		  unsigned int rows,
+       			  		  unsigned int cols,
+			  			  float *h_filter,
+			  			  int filter_width,
+            		  	  float *h_sobel_mask_x,
+			  			  float *h_sobel_mask_y);
 
 int main( int argc, const char** argv ) {
         
@@ -66,13 +66,13 @@ int main( int argc, const char** argv ) {
     	for (int c = -blurKernelWidth/2; c <= blurKernelWidth/2; ++c) {
       		float filterValue = expf( -(float)(c * c + r * r) / (2.f * blurKernelSigma * blurKernelSigma));
       		h_filter[(r + blurKernelWidth/2) * blurKernelWidth + c + blurKernelWidth/2] = filterValue;
-     	filterSum += filterValue;
+     		filterSum += filterValue;
     	}
   	}
   	float normalizationFactor = 1.f / filterSum;
   	for (int r = -blurKernelWidth/2; r <= blurKernelWidth/2; ++r) {
     	for (int c = -blurKernelWidth/2; c <= blurKernelWidth/2; ++c) {
-      	h_filter[(r + blurKernelWidth/2) * blurKernelWidth + c + blurKernelWidth/2] *= normalizationFactor;
+      		h_filter[(r + blurKernelWidth/2) * blurKernelWidth + c + blurKernelWidth/2] *= normalizationFactor;
     	}
   	}
 
