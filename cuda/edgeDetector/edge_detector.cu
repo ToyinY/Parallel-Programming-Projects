@@ -29,11 +29,11 @@ inline cudaError_t checkCuda(cudaError_t result) {
 }
 
 __global__ void gaussianBlur(unsigned char *input,
-			     unsigned char *output,
-			     unsigned int rows,
-			     unsigned int cols,
-			     float *filter,
-			     int filter_width) {
+			     			 unsigned char *output,
+			     			 unsigned int rows,
+			     			 unsigned int cols,
+			     			 float *filter,
+			     			 int filter_width) {
 	
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
@@ -59,9 +59,9 @@ __global__ void gaussianBlur(unsigned char *input,
 }
 
 __global__ void medianFilter(unsigned char *input,
-			     unsigned char *output,
-			     unsigned int rows,
-			     unsigned int cols){
+			     			 unsigned char *output,
+			     			 unsigned int rows,
+			     			 unsigned int cols){
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
 	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
@@ -96,13 +96,13 @@ __global__ void medianFilter(unsigned char *input,
 }
 
 __global__ void sobelFilter(unsigned char *input, 
-			    unsigned char *output, 
-			    float *edge_magnitude,
-			    double *edge_direction,
-			    float *sobel_mask_x,
-			    float *sobel_mask_y,
-			    unsigned int rows,
-			    unsigned int cols){
+			    			unsigned char *output, 
+			    			float *edge_magnitude,
+			    			double *edge_direction,
+			    			float *sobel_mask_x,
+			    			float *sobel_mask_y,
+			    			unsigned int rows,
+			    			unsigned int cols){
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
 	if (x >= cols || y >= rows)
@@ -144,10 +144,10 @@ __global__ void sobelFilter(unsigned char *input,
 }
 
 __global__ void nonMaxSuppression(unsigned char *input,
-				  unsigned char *output,
-				  double *edge_direction,
-				  unsigned int rows,
-				  unsigned int cols) {
+				  				  unsigned char *output,
+				  				  double *edge_direction,
+				  				  unsigned int rows,
+				  				  unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
 	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
@@ -178,9 +178,9 @@ __global__ void nonMaxSuppression(unsigned char *input,
 }
 
 __global__ void doubleThreshold(unsigned char *input,
-				unsigned char *output,
-				unsigned int rows,
-				unsigned int cols) {
+								unsigned char *output,
+								unsigned int rows,
+								unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
 	if (x >= cols || y >= rows)
@@ -199,9 +199,9 @@ __global__ void doubleThreshold(unsigned char *input,
 }
 
 __global__ void histeresis(unsigned char *input, 
-			  unsigned char *output,
-			  unsigned int rows,
-			  unsigned int cols) {
+			  			   unsigned char *output,
+			  			   unsigned int rows,
+			  			   unsigned int cols) {
 	int x = blockIdx.x * TILE_SIZE + threadIdx.x;
 	int y = blockIdx.y * TILE_SIZE + threadIdx.y;
 	if (x >= cols - 1 || y >= rows - 1 || x == 0 || y == 0)
@@ -227,13 +227,13 @@ __global__ void histeresis(unsigned char *input,
 }
 
 void edgeDetector (unsigned char* h_input,
-		   unsigned char* h_output,
-		   unsigned int rows,
-		   unsigned int cols,
-		   float* h_filter,
-		   int filter_width,
-		   float *h_sobel_mask_x,
-		   float *h_sobel_mask_y) {
+		  	 	   unsigned char* h_output,
+		   		   unsigned int rows,
+		   		   unsigned int cols,
+		   		   float* h_filter,
+		   		   int filter_width,
+		   		   float *h_sobel_mask_x,
+		   		   float *h_sobel_mask_y) {
 
 	// block and grid size
 	int gridX = 1 + ((cols - 1) / TILE_SIZE);
