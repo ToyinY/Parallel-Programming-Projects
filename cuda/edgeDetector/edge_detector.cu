@@ -220,9 +220,8 @@ __global__ void histeresis(unsigned char *input,
 			(input[(y - 1) * cols + (x - 1)] == strong) || 
 			(input[(y + 1) * cols + (x + 1)] == strong)) // if a surrounding pixel is strong
 			output[index] = strong; // set the weak pixel to strong
-		else {
-			output[index] = 0; // otherwise, set the pixel to be non-relevant
-		}
+	} else {
+		output[index] = input[index];
 	}
 }
 
@@ -308,13 +307,13 @@ void edgeDetector (unsigned char* h_input,
 	cudaDeviceSynchronize();
 
 	// 5) Hysteresis (only call if needed)
-	/*histeresis<<<dimGrid, dimBlock, s1>>>(d_output_thresh, d_output, rows, cols);
-	cudaDeviceSynchronize();*/
+	histeresis<<<dimGrid, dimBlock>>>(d_output_thresh, d_output, rows, cols);
+	cudaDeviceSynchronize();
 
 	//*** Edge Detection Finished ***//
 
 	// copy final output image to host (use correct output)
-	checkCuda(cudaMemcpy(h_output, d_output_thresh, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
+	checkCuda(cudaMemcpy(h_output, d_output, size * sizeof(unsigned char), cudaMemcpyDeviceToHost));
 
 	// free memory
 	checkCuda(cudaFree(d_input));
