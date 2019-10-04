@@ -1,28 +1,30 @@
-# Parallel Canny Image Edge Detector
+# Parallel Image Edge Detector
 
 ## The Parallel Edge Detection Problem
 ### Task: Creates a fast parallel program that detects the edges of objects on an image.
 ### Methodology:
-  - Write the program in CUDA C++ using a NVIDIA GPU and CUDA Toolkit on Northeastern's Discovery Cluster
+  - Write the program in CUDA C++ using a NVIDIA GPU and CUDA Toolkit on the Northeastern's Discovery Cluster
     - Information about the Discovery Cluster can be found here: www.rc.northeastern.edu
   - Implement the steps of the Canny Edge Detector Algorithm in parallel
-  - USe the OpenCV library to read and write image data
+  - Use the OpenCV library to read and write image data
 
 ## Canny Edge Detector Algorithm
+# Steps
 1. Noise Reduction with Gaussian Blur
-   - Weighted average value of the surrounding pixels in grey scale
+   - The weighted average value of the surrounding pixels in grey scale
 2. Gradient Calculation with Sobel Filter
    - Detects edge intensity and direction
 3. Non-Maximum Suppression
-   - Find picel with the maximum value in edge directions
+   - Find pixels with the maximum value in edge directions
 4. Double Threshold
    - Identifies string, weak, and non relevant pixels
 5. Hysteresis
    - Transforms weak pixels to strong or irrelevant pixels
+More information about this algorthm can be found here: https://en.wikipedia.org/wiki/Canny_edge_detector
 
-## Instructions on runnning program on the discvoery cluster
-1. Create an account on the clusster and ssh in.
-2. In the login node you can create an compile programs, but you cannot run programs. To get to a GPU node, use   command:
+## Instructions on runnning program on the discovery cluster
+1. Create an account on the cluster and ssh in.
+2. In the login node you can create and compile programs, but you cannot run programs. To get to a GPU node, use command:
 ```
 srun --pty --nodes 1 --job-name=interactive --partition=gpu --gres=gpu:1 /bin/bash
 ```
@@ -32,7 +34,7 @@ srun --pty --nodes 1 --job-name=interactive --partition=gpu --gres=gpu:1 --time=
 ```
 After a few moments you will be connected to a node.
 
-3. If you have not done so already, clown the github repository and run ```make``` in the edgeDetector directory (Parallel-Programming-Projects/cuda/edgeDetector).
+3. If you have not done so already, clown the repository and run ```make``` in the edgeDetector directory (Parallel-Programming-Projects/cuda/edgeDetector).
 Note: You can edit the ```main.cpp``` file to specify input image and output image name. (Work in progress: have users choose their image when call program from the command line)
 
 4. run command 
