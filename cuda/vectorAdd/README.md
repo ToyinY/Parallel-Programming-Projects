@@ -14,7 +14,6 @@ srun --pty --nodes 1 --job-name=interactive --partition=gpu --gres=gpu:1 --time=
 After a few moments you will be connected to a node.
 
 3. If you have not done so already, clown the github repository and run ```make``` in the vectorAdd directory (Parallel-Programming-Projects/cuda/vectorAdd).
-Note: You can edit the ```main.cpp``` file to specify input image and output image name. (Work in progress: have users choose their image when call program from the command line)
 
 4. run command 
 ```./vector_add```
