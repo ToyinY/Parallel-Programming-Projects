@@ -1,4 +1,4 @@
-# Parallel Canny Image Edge Detector Implemented in CUDA C++
+# Parallel Canny Image Edge Detector
 
 ## The Parallel Edge Detection Problem
 ### Task: Creates a fast parallel program that detects the edges of objects on an image.
@@ -7,7 +7,7 @@
   - Implement the steps of the Canny Edge Detector Algorithm in parallel
   - USe the OpenCV library to read and write image data
 
-### Canny Edge Detector Algorithm
+## Canny Edge Detector Algorithm
 1. Noise Reduction with Gaussian Blur
    - Weighted average value of the surrounding pixels in grey scale
 2. Gradient Calculation with Sobel Filter
