@@ -1,5 +1,5 @@
 # Image Blur
-
+## Perform a gaussian blur on an image.
 ## Instructions on runnning program on the discovery cluster
 1. Create an account on the cluster and ssh in.
 2. In the login node you can create and compile programs, but you cannot run programs. To get to a GPU node, use command:
